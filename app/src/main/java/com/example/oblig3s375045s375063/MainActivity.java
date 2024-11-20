@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
@@ -17,6 +18,7 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -67,10 +69,25 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(oslo, 10));
 
         // Legger til en klikklytter for å håndtere å legge til nye markører
-        mMap.setOnMapClickListener(new OnMapClickListener() {
+        mMap.setOnMapClickListener(latLng -> åpneLeggTilStedDialog(latLng));
+
+        // Tilpasset infovindu
+        mMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
             @Override
-            public void onMapClick(LatLng latLng) {
-                åpneLeggTilStedDialog(latLng);
+            public View getInfoWindow(Marker marker) {
+                return null; // Bruk standard ramme for infovinduet
+            }
+
+            @Override
+            public View getInfoContents(Marker marker) {
+                View infoWindow = LayoutInflater.from(MainActivity.this).inflate(R.layout.custom_info_window, null);
+                TextView title = infoWindow.findViewById(R.id.title);
+                TextView snippet = infoWindow.findViewById(R.id.snippet);
+
+                title.setText(marker.getTitle());
+                snippet.setText(marker.getSnippet());
+
+                return infoWindow;
             }
         });
 
@@ -116,8 +133,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 int responseCode = connection.getResponseCode();
                 if (responseCode == HttpURLConnection.HTTP_OK) {
                     handler.post(() -> {
-                        // Legg til markør på kartet etter at data er lagret
-                        mMap.addMarker(new MarkerOptions().position(latLng).title(beskrivelse).snippet(adresse));
+                        String snippet = "Adresse: " + adresse + "\nLatitude: " + latLng.latitude + "\nLongitude: " + latLng.longitude;
+                        mMap.addMarker(new MarkerOptions().position(latLng).title(beskrivelse).snippet(snippet));
                         Toast.makeText(MainActivity.this, "Sted lagret", Toast.LENGTH_SHORT).show();
                     });
                 } else {
@@ -155,7 +172,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void parseOgVisMarkører(String response) {
-        // Sjekk at mMap er initialisert før du prøver å bruke det
         if (mMap == null) {
             Toast.makeText(this, "Kartet er ikke klart ennå", Toast.LENGTH_SHORT).show();
             return;
@@ -168,12 +184,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 String beskrivelse = jsonObject.getString("beskrivelse");
                 String adresse = jsonObject.getString("gateadresse");
 
-                // Konverter latitude og longitude fra String til double
                 double latitude = Double.parseDouble(jsonObject.getString("latitude"));
                 double longitude = Double.parseDouble(jsonObject.getString("longitude"));
 
                 LatLng latLng = new LatLng(latitude, longitude);
-                mMap.addMarker(new MarkerOptions().position(latLng).title(beskrivelse).snippet(adresse));
+
+                String snippet = "Adresse: " + adresse + "\nLatitude: " + latitude + "\nLongitude: " + longitude;
+                mMap.addMarker(new MarkerOptions().position(latLng).title(beskrivelse).snippet(snippet));
             }
         } catch (Exception e) {
             Toast.makeText(MainActivity.this, "Feil i parsing: " + e.getMessage(), Toast.LENGTH_SHORT).show();
