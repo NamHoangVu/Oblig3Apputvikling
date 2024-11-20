@@ -41,22 +41,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Edge-to-edge layout handling
+        // Tilpass layout for å inkludere systemstenger (f.eks. statuslinje)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
 
-        // Initialiserer handler og executor
+        // Initialiserer handler for UI-oppdateringer og executor for bakgrunnsoppgaver
         handler = new Handler();
         executor = Executors.newSingleThreadExecutor();
 
-        // Konfigurer Google Maps
+        // Sett opp Google Maps
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         if (mapFragment != null) {
-            mapFragment.getMapAsync(this); // Kartet åpnes og `onMapReady` blir kalt når klart
+            mapFragment.getMapAsync(this); // Kartet lastes inn
         }
     }
 
@@ -64,14 +64,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
-        // Sett en standard posisjon og zoom (for eksempel Oslo)
+        // Sett en standard posisjon og zoom (her: Oslo)
         LatLng oslo = new LatLng(59.911491, 10.757933);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(oslo, 10));
 
-        // Legger til en klikklytter for å håndtere å legge til nye markører
-        mMap.setOnMapClickListener(latLng -> åpneLeggTilStedDialog(latLng));
-
-        // Tilpasset infovindu
+        // Tilpasset infovindu for markører
         mMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
             @Override
             public View getInfoWindow(Marker marker) {
@@ -91,38 +88,44 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         });
 
-        // Kall metoden for å legge til markører når kartet er klart
+        // Håndter klikk på kartet for å legge til nye markører
+        mMap.setOnMapClickListener(latLng -> åpneLeggTilStedDialog(latLng));
+
+        // Last inn eksisterende markører fra databasen
         utførWebtjenesteForespørsel();
     }
 
     private void åpneLeggTilStedDialog(LatLng latLng) {
-        // Inflater den egendefinerte dialoglayouten
+        // Inflater dialogen for å legge til et sted
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_location, null);
-        EditText beskrivelseInput = dialogView.findViewById(R.id.descriptionInput);
-        EditText adresseInput = dialogView.findViewById(R.id.addressInput);
+        EditText nameInput = dialogView.findViewById(R.id.nameInput); // Input for navn
+        EditText beskrivelseInput = dialogView.findViewById(R.id.descriptionInput); // Input for beskrivelse
+        EditText adresseInput = dialogView.findViewById(R.id.addressInput); // Input for adresse
 
         new AlertDialog.Builder(this)
                 .setTitle("Legg til sted")
                 .setView(dialogView)
                 .setPositiveButton("Lagre", (dialog, which) -> {
+                    String navn = nameInput.getText().toString();
                     String beskrivelse = beskrivelseInput.getText().toString();
                     String adresse = adresseInput.getText().toString();
-                    leggTilStedIDatabase(latLng, beskrivelse, adresse);
+                    leggTilStedIDatabase(latLng, navn, beskrivelse, adresse);
                 })
                 .setNegativeButton("Avbryt", null)
                 .show();
     }
 
-    private void leggTilStedIDatabase(LatLng latLng, String beskrivelse, String adresse) {
+    private void leggTilStedIDatabase(LatLng latLng, String navn, String beskrivelse, String adresse) {
         executor.execute(() -> {
             try {
+                // Koble til web-tjeneste for å lagre sted i databasen
                 URL url = new URL("https://dave3600.cs.oslomet.no/~s375045/jsonin.php");
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
 
-                String postData = "beskrivelse=" + beskrivelse + "&gateadresse=" + adresse
+                String postData = "navn=" + navn + "&beskrivelse=" + beskrivelse + "&gateadresse=" + adresse
                         + "&latitude=" + latLng.latitude + "&longitude=" + latLng.longitude;
 
                 OutputStreamWriter writer = new OutputStreamWriter(connection.getOutputStream());
@@ -133,8 +136,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 int responseCode = connection.getResponseCode();
                 if (responseCode == HttpURLConnection.HTTP_OK) {
                     handler.post(() -> {
-                        String snippet = "Adresse: " + adresse + "\nLatitude: " + latLng.latitude + "\nLongitude: " + latLng.longitude;
-                        mMap.addMarker(new MarkerOptions().position(latLng).title(beskrivelse).snippet(snippet));
+                        // Opprett markør på kartet
+                        String snippet = "Beskrivelse: " + beskrivelse + "\nAdresse: " + adresse +
+                                "\nLatitude: " + latLng.latitude + "\nLongitude: " + latLng.longitude;
+                        mMap.addMarker(new MarkerOptions().position(latLng).title(navn).snippet(snippet));
                         Toast.makeText(MainActivity.this, "Sted lagret", Toast.LENGTH_SHORT).show();
                     });
                 } else {
@@ -149,6 +154,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private void utførWebtjenesteForespørsel() {
         executor.execute(() -> {
             try {
+                // Hent data fra web-tjenesten
                 URL url = new URL("https://dave3600.cs.oslomet.no/~s375045/jsonout.php");
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
@@ -181,6 +187,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             JSONArray jsonArray = new JSONArray(response);
             for (int i = 0; i < jsonArray.length(); i++) {
                 JSONObject jsonObject = jsonArray.getJSONObject(i);
+                String navn = jsonObject.getString("navn");
                 String beskrivelse = jsonObject.getString("beskrivelse");
                 String adresse = jsonObject.getString("gateadresse");
 
@@ -189,8 +196,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                 LatLng latLng = new LatLng(latitude, longitude);
 
-                String snippet = "Adresse: " + adresse + "\nLatitude: " + latitude + "\nLongitude: " + longitude;
-                mMap.addMarker(new MarkerOptions().position(latLng).title(beskrivelse).snippet(snippet));
+                // Opprett infotekst for markør
+                String snippet = "Beskrivelse: " + beskrivelse +
+                        "\nAdresse: " + adresse +
+                        "\nLatitude: " + latitude +
+                        "\nLongitude: " + longitude;
+
+                mMap.addMarker(new MarkerOptions()
+                        .position(latLng)
+                        .title(navn)
+                        .snippet(snippet));
             }
         } catch (Exception e) {
             Toast.makeText(MainActivity.this, "Feil i parsing: " + e.getMessage(), Toast.LENGTH_SHORT).show();

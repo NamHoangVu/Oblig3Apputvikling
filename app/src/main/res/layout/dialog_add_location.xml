@@ -5,15 +5,28 @@
     android:orientation="vertical"
     android:padding="16dp">
 
+    <!-- EditText for navn -->
+    <EditText
+        android:id="@+id/nameInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Navn"
+        android:inputType="textPersonName" />
+
+    <!-- EditText for beskrivelse -->
     <EditText
         android:id="@+id/descriptionInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Beskrivelse" />
+        android:hint="Beskrivelse"
+        android:inputType="textMultiLine" />
 
+    <!-- EditText for gateadresse -->
     <EditText
         android:id="@+id/addressInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Gateadresse" />
+        android:hint="Gateadresse"
+        android:inputType="textPostalAddress" />
+
 </LinearLayout>
